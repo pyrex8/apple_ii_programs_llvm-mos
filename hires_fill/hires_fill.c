@@ -2,14 +2,10 @@
 #include <stdint.h>
 
 #define WHITE               0x7F           // White hires byte
-#define BLACK               0x00
-
 #define HGR1SCRN_PAGE       0x20
 #define HGRSCRN_LENGTH      0x20           // number of pages
 #define TXTCLR              0xC050         // graphics mode
 #define HIRES               0xC057         // hires mode
-
-#define CASSETTE_OUT        0xC020
 
 #define STROBE(x) asm("bit %0" :: "i"(x));
 
@@ -28,7 +24,7 @@ enum Zero_page
 #define ADDR1L_P            *((uint8_t*)ADDR1L)
 #define ADDR1H_P            *((uint8_t*)ADDR1H)
 
-static void pageset(uint8_t page, uint8_t value, uint8_t length)
+static inline void pageset(uint8_t page, uint8_t value, uint8_t length)
 {
     // this method takes 114ms
     DATA1_P = value;
@@ -56,10 +52,7 @@ int main(void)
     STROBE(HIRES);
     while(1)
     {
-        STROBE(CASSETTE_OUT);
         pageset(HGR1SCRN_PAGE, WHITE, HGRSCRN_LENGTH);
-        STROBE(CASSETTE_OUT);
-        pageset(HGR1SCRN_PAGE, BLACK, HGRSCRN_LENGTH);
     }
     return 0;
 }
