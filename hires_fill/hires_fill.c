@@ -29,8 +29,7 @@ enum Zero_page
 #define ADDR1H_P            *((uint8_t*)ADDR1H)
 
 
-static inline void pageset(
-    uint8_t volatile page, uint8_t volatile value, uint8_t volatile length)
+static inline void pageset(uint8_t page, uint8_t value, uint8_t length)
 {
     // this method takes 114ms
     DATA1_P = value;
@@ -39,17 +38,17 @@ static inline void pageset(
     ADDR1L_P = 0x00;
 
     // init registers with memory
-    asm ("lda %0" :: "i"(DATA1));    // value to fill page(s) with
-    asm ("ldx %0" :: "i"(DATA2));    // number of pages
-    asm ("ldy %0" :: "i"(ADDR1L)); // address two bytes
+    asm volatile ("lda %0" :: "i"(DATA1));    // value to fill page(s) with
+    asm volatile ("ldx %0" :: "i"(DATA2));    // number of pages
+    asm volatile ("ldy %0" :: "i"(ADDR1L)); // address two bytes
 
     // nested loops
-    asm ("1: sta (%0),y" :: "i"(ADDR1L));
-    asm ("iny");
-    asm ("bne 1b");
-    asm ("inc %0" :: "i"(ADDR1H));
-    asm ("dex");
-    asm ("bne 1b");
+    asm volatile ("1: sta (%0),y" :: "i"(ADDR1L));
+    asm volatile ("iny");
+    asm volatile ("bne 1b");
+    asm volatile ("inc %0" :: "i"(ADDR1H));
+    asm volatile ("dex");
+    asm volatile ("bne 1b");
 }
 
 int main(void)
