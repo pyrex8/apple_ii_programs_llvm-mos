@@ -56,12 +56,11 @@ int main(void)
 {
     STROBE(TXTCLR);
     STROBE(HIRES);
+    STROBE(CASSETTE_OUT);
+    pageset(HGR1SCRN_PAGE, BLACK, HGRSCRN_LENGTH);
+    STROBE(CASSETTE_OUT);
     while(1)
     {
-        STROBE(CASSETTE_OUT);
-        pageset(HGR1SCRN_PAGE, WHITE, HGRSCRN_LENGTH);
-        STROBE(CASSETTE_OUT);
-        pageset(HGR1SCRN_PAGE, BLACK, HGRSCRN_LENGTH);
     }
     return 0;
 }
