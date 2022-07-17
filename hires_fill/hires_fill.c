@@ -23,10 +23,13 @@
 
 #define STROBE(x) asm volatile ("bit %0" :: "i"(x));
 
+#define BYTE_LO_GET(x)      *((uint8_t *) & x)
+#define BYTE_HI_GET(x)      *(((uint8_t *) & x) + 1)
+
 // Addresses
 enum Zero_page
 {
-    DATA1 = 0x26,
+    DATA1 = 0xE0,
     DATA2,
     DATA3,
     DATA4,
@@ -56,27 +59,27 @@ enum Zero_page
 #define SBUFR               SBUFRL // sprint buffer location
 
 // pointers to zero page memory
-#define DATA1_P             *((uint8_t*)DATA1)
-#define DATA2_P             *((uint8_t*)DATA2)
-#define DATA3_P             *((uint8_t*)DATA3)
-#define DATA4_P             *((uint8_t*)DATA4)
-#define DATA5_P             *((uint8_t*)DATA5)
+uint8_t volatile *const DATA1_P = (uint8_t *)DATA1;
+uint8_t volatile *const DATA2_P = (uint8_t*)DATA2;
+uint8_t volatile *const DATA3_P = (uint8_t*)DATA3;
+uint8_t volatile *const DATA4_P = (uint8_t*)DATA4;
+uint8_t volatile *const DATA5_P = (uint8_t*)DATA5;
 
-#define ADDR1L_P            *((uint8_t*)ADDR1L)
-#define ADDR1H_P            *((uint8_t*)ADDR1H)
-#define ADDR2L_P            *((uint8_t*)ADDR2L)
-#define ADDR2H_P            *((uint8_t*)ADDR2H)
+uint8_t volatile *const ADDR1L_P = (uint8_t*)ADDR1L;
+uint8_t volatile *const ADDR1H_P = (uint8_t*)ADDR1H;
+uint8_t volatile *const ADDR2L_P = (uint8_t*)ADDR2L;
+uint8_t volatile *const ADDR2H_P = (uint8_t*)ADDR2H;
 
-#define LKLOL_P             *((uint8_t*)LKLOL)
-#define LKLOH_P             *((uint8_t*)LKLOH)
-#define LKHIL_P             *((uint8_t*)LKHIL)
-#define LKHIH_P             *((uint8_t*)LHHIH)
+uint8_t volatile *const LKLOL_P = (uint8_t*)LKLOL;
+uint8_t volatile *const LKLOH_P = (uint8_t*)LKLOH;
+uint8_t volatile *const LKHIL_P = (uint8_t*)LKHIL;
+uint8_t volatile *const LKHIH_P = (uint8_t*)LHHIH;
 
-#define SBUFRL_P            *((uint8_t*)SBUFRL)
-#define SBUFRH_P            *((uint8_t*)SBUFRH)
+uint8_t volatile *const SBUFRL_P = (uint8_t*)SBUFRL;
+uint8_t volatile *const SBUFRH_P = (uint8_t*)SBUFRH;
+uint8_t volatile *const SPRITEL_P = (uint8_t*)SPRITEL;
+uint8_t volatile *const SPRITEH_P = (uint8_t*)SPRITEH;
 
-#define SPRITEL_P            *((uint8_t*)SPRITEL)
-#define SPRITEH_P            *((uint8_t*)SPRITEH)
 
 static const uint8_t lklo[256] =
 {
@@ -188,16 +191,35 @@ static const uint8_t sprites[] =
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 };
 
+static uint8_t sprite_x1;
+static uint8_t sprite_y1;
+static uint8_t sprite_x2;
+static uint8_t sprite_y2;
 
+static uint8_t sprite_xl;
+static uint8_t sprite_xh;
 
-static inline void pageset(
-    uint8_t page, uint8_t value, uint8_t length)
+static uint8_t sprite_no_jump;
+
+static uint8_t sprite_buffer[SPRITE_BUFFER_SIZE];
+
+static void pointers_init(void)
+{
+    *LKLOL_P = (uint8_t)((uint16_t)lklo);
+    *LKLOH_P = (uint8_t)(((uint16_t)lklo)>> 8);
+    *LKHIL_P = (uint8_t)((uint16_t)lkhi);
+    *LKHIH_P = (uint8_t)(((uint16_t)lkhi) >> 8);
+    *SBUFRL_P = (uint8_t)((uint16_t)sprite_buffer);
+    *SBUFRH_P = (uint8_t)(((uint16_t)sprite_buffer)>> 8);
+}
+
+static inline void pageset(uint8_t page, uint8_t value, uint8_t length)
 {
     // this method takes 114ms
-    DATA1_P = value;
-    DATA2_P = length;
-    ADDR1H_P = page;
-    ADDR1L_P = 0x00;
+    *DATA1_P = value;
+    *DATA2_P = length;
+    *ADDR1H_P = page;
+    *ADDR1L_P = 0x00;
 
     // init registers with memory
     asm volatile ("lda %0" :: "i"(DATA1) : "a");    // value to fill page(s) with
@@ -216,11 +238,11 @@ static inline void pageset(
 static inline void hline(uint8_t column, uint8_t row, uint8_t length, uint8_t pixels)
 {
     // 1.7ms
-    DATA1_P = pixels;
-    DATA2_P = column;
-    DATA3_P = column + length;
-    ADDR1L_P = lklo[row];
-    ADDR1H_P = lkhi[row];
+    *DATA1_P = pixels;
+    *DATA2_P = column;
+    *DATA3_P = column + length;
+    *ADDR1L_P = lklo[row];
+    *ADDR1H_P = lkhi[row];
 
     // init
     asm volatile ("ldy %0" :: "i"(DATA3) : "y");
@@ -233,6 +255,34 @@ static inline void hline(uint8_t column, uint8_t row, uint8_t length, uint8_t pi
     asm volatile ("cpy %0" :: "i"(DATA2));
     asm volatile ("bne 1b");
 }
+
+static inline void vline(uint8_t column, uint8_t row, uint8_t length, uint8_t pixels)
+{
+    // 11.2ms
+    *DATA1_P = pixels;
+    *DATA2_P = column;
+    *DATA3_P = row;
+    *DATA4_P = row + length;
+
+    // init
+    asm volatile ("ldx %0" :: "i"(DATA4) : "x");            // Start at second-to-last row
+
+    // loop
+    asm volatile ("1: dex" ::: "x");
+    asm volatile ("txa" ::: "a");                           // row to a
+    asm volatile ("tay" ::: "y");                           // row to y
+    asm volatile ("lda (%0),y" :: "i"(LKLO) : "a");         // Get the row address
+    asm volatile ("sta %0" :: "i"(ADDR1L) : "memory");
+    asm volatile ("lda (%0),y" :: "i"(LKHI) : "a");
+    asm volatile ("sta %0" :: "i"(ADDR1H) : "memory");
+    asm volatile ("ldy %0" :: "i"(DATA2) : "y");            // column
+    asm volatile ("lda (%0),y" :: "i"(ADDR1L) : "a");
+    asm volatile ("eor %0" :: "i"(DATA1) : "memory");
+    asm volatile ("sta (%0),y" :: "i"(ADDR1L) : "memory");
+    asm volatile ("cpx %0" :: "i"(DATA3));
+    asm volatile ("bne 1b");
+}
+
 
 static inline void hclear(void)
 {
@@ -248,12 +298,13 @@ static inline void hbox(void)
 {
     hline(COLUMN_FIRST, ROW_FIRST, COLUMNS, WHITE);
     hline(COLUMN_FIRST, ROW_LAST, COLUMNS, WHITE);
-    // vline(COLUMN_FIRST, 0, 192, 0x03);
+    vline(COLUMN_FIRST, 0, 192, 0x03);
     // vline(COLUMN_LAST, 0, 192, 0x60);
 }
 
 int main(void)
 {
+    pointers_init();
     hclear();
     hbox();
 
