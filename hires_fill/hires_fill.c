@@ -1,5 +1,6 @@
 
 #include <stdint.h>
+#include <string.h>
 
 #define ROWS                192	// number of scanlines
 #define ROW_FIRST           0
@@ -21,7 +22,7 @@
 
 #define CASSETTE_OUT        0xC020
 
-#define STROBE(x) asm volatile ("bit %0" :: "i"(x));
+#define STROBE(x) asm volatile ("bit %0" :: "i"(x) : "memory");
 
 #define BYTE_LO_GET(x)      *((uint8_t *) & x)
 #define BYTE_HI_GET(x)      *(((uint8_t *) & x) + 1)
@@ -203,6 +204,15 @@ static uint8_t sprite_no_jump;
 
 static uint8_t sprite_buffer[SPRITE_BUFFER_SIZE];
 
+
+union test
+{
+    uint16_t *value;
+    uint8_t b[2];
+};
+
+union test t;
+
 static void pointers_init(void)
 {
     *LKLOL_P = (uint8_t)((uint16_t)lklo);
@@ -283,13 +293,25 @@ static inline void vline(uint8_t column, uint8_t row, uint8_t length, uint8_t pi
     asm volatile ("bne 1b");
 }
 
+static inline void vline_c(uint8_t value)
+{
+    // 434ms
+    STROBE(CASSETTE_OUT);
+    for (uint8_t y = 0; y < 192; y++)
+    {
+        t.b[1] = lkhi[y];
+        t.b[0] = lklo[y];
+        for (uint8_t x = 0; x < 40; x++)
+        {
+            *t.value  = value;
+            t.b[0]++;
+        }
+    }
+}
 
 static inline void hclear(void)
 {
-    STROBE(CASSETTE_OUT);
     pageset(HGR1SCRN_PAGE, BLACK, HGRSCRN_LENGTH);
-    STROBE(CASSETTE_OUT);
-
     STROBE(HIRES);
     STROBE(TXTCLR);
 }
@@ -298,7 +320,7 @@ static inline void hbox(void)
 {
     hline(COLUMN_FIRST, ROW_FIRST, COLUMNS, WHITE);
     hline(COLUMN_FIRST, ROW_LAST, COLUMNS, WHITE);
-    vline(COLUMN_FIRST, 0, 192, 0x03);
+    // vline(20, 20, 25, 0x03);
     // vline(COLUMN_LAST, 0, 192, 0x60);
 }
 
@@ -308,8 +330,12 @@ int main(void)
     hclear();
     hbox();
 
+
+
     while(1)
     {
+        vline_c(BLACK);
+        vline_c(WHITE);
     }
     return 0;
 }
